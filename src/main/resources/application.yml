@@ -1,4 +1,3 @@
-
 spring:
   application:
     name: antes-da-chuva
@@ -33,6 +32,12 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    ssl:
+      enabled: ${RABBITMQ_SSL_ENABLED:false}
 
 server:
   port: ${PORT:8080}
@@ -54,10 +59,3 @@ app:
     exchange: incident.exchange
     queue: incident.triage.queue
     routing-key: incident.created
-    publisher-confirm-type: correlated
-    publisher-returns: true
-    template:
-      mandatory: true
-    ssl:
-      enabled: ${RABBITMQ_SSL_ENABLED:false}
-
