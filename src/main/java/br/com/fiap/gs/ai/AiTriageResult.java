@@ -1,4 +1,10 @@
 package br.com.fiap.gs.ai;
 
-public class AiTriageResult {
+import br.com.fiap.gs.enums.Urgency;
+
+public record AiTriageResult(
+        Urgency urgency,
+        String summary,
+        String guidance
+) {
 }

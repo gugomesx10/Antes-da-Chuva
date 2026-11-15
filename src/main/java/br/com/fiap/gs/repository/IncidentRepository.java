@@ -2,6 +2,9 @@ package br.com.fiap.gs.repository;
 
 import br.com.fiap.gs.entity.Incident;
 import br.com.fiap.gs.enums.IncidentStatus;
+import br.com.fiap.gs.enums.TriageStatus;
+import java.time.Instant;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -25,5 +28,10 @@ public interface IncidentRepository extends JpaRepository<Incident, Long>,
             Long userId,
             IncidentStatus status,
             Pageable pageable
+    );
+
+    List<Incident> findTop50ByTriageStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+            TriageStatus triageStatus,
+            Instant createdAt
     );
 }

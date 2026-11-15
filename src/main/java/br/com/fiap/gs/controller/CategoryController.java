@@ -11,12 +11,14 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 import java.net.URI;
 
 @RestController
 @RequestMapping("/categories")
 @RequiredArgsConstructor
+@SecurityRequirement(name = "bearerAuth")
 public class CategoryController {
 
     private final CategoryService service;

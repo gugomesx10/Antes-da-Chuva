@@ -145,7 +145,13 @@ public class IncidentService {
         incident.setAiGuidance(null);
         incident.setTriageStatus(TriageStatus.PENDING);
 
-        return mapper.toResponse(incidentRepository.save(incident));
+        Incident saved = incidentRepository.saveAndFlush(incident);
+
+        eventPublisher.publishEvent(
+                new IncidentTriageRequested(saved.getId())
+        );
+
+        return mapper.toResponse(saved);
     }
 
     @Transactional
