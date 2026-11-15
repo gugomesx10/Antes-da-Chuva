@@ -144,6 +144,32 @@ java -jar target/Global-Solution-Antes-Da-Chuva-0.0.1-SNAPSHOT.jar
 
 O projeto também possui Maven Wrapper (`./mvnw`). O JAR depende dos serviços e segredos configurados para inicializar corretamente.
 
+## Infraestrutura no Azure
+
+Toda a infraestrutura é criada por scripts Azure CLI em `scripts/`, sem nenhum segredo no código: senhas e chaves vêm de `scripts/.env` (local, fora do Git) ou do Variable Group do Azure DevOps.
+
+| Recurso | Nome | Uso |
+| --- | --- | --- |
+| Resource Group | `rg-antesdachuva` | Agrupa tudo |
+| Azure Database for PostgreSQL Flexible Server | `pg-antesdachuva-<RM>` | Banco da aplicação (Flyway cria as tabelas) |
+| Azure Container Registry | `acrantesdachuva<RM>` | Imagem do RabbitMQ (`dockerfiles/rabbitmq`) |
+| Azure Container Instances | `aci-rabbitmq-antesdachuva` | RabbitMQ (AMQP 5672, painel 15672) |
+| App Service Plan B1 Linux + Web App Java 21 | `app-antesdachuva-<RM>` | API |
+
+```bash
+cp scripts/.env.example scripts/.env   # preencha RM, senhas, JWT_SECRET e GEMINI_API_KEY
+az login
+./scripts/azure-setup.sh               # cria os recursos e as App Settings (pode ser executado de novo)
+./scripts/azure-deploy.sh              # build + deploy manual do jar (antes da Release do DevOps)
+./scripts/azure-delete.sh              # remove tudo (somente após o fim da correção)
+```
+
+| Arquivo | Conteúdo |
+| --- | --- |
+| `scripts/script-bd.sql` | DDL completo do PostgreSQL (consolidação das migrations Flyway) |
+| `dockerfiles/rabbitmq/Dockerfile` | Imagem do RabbitMQ publicada no ACR e executada no ACI |
+| `dockerfiles/app/Dockerfile` | Imagem da API (build multi-stage, Java 21) |
+
 ## Testes e estado atual
 
 Foram aprovados testes unitários de cadastro, login, assinatura JWT, mapeamento de perfis, autorização HTTP, recuperação RAG, triagem e reenvio de mensagens pendentes. Também foi executado um teste de integração **real** com Spring AI + Gemini + RAG: um relato fictício de bueiro entupido recebeu a urgência `HIGH`, com resumo e orientação preventiva.
