@@ -3,6 +3,7 @@ package br.com.fiap.gs.exception;
 import br.com.fiap.gs.dto.ApiErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -52,6 +53,18 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.badRequest().body(response);
     }
+
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleBadCredentials(
+            BadCredentialsException ex
+    ) {
+        return buildResponse(
+                HttpStatus.UNAUTHORIZED,
+                "Credenciais inválidas"
+        );
+    }
+
 
     private ResponseEntity<ApiErrorResponse> buildResponse(
             HttpStatus status,

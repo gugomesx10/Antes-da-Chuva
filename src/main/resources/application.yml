@@ -29,3 +29,9 @@ management:
     web:
       exposure:
         include: health,info
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:antes-da-chuva-api}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
