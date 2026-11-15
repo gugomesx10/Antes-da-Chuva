@@ -35,3 +35,15 @@ security:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:antes-da-chuva-api}
     expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+app:
+  rabbitmq:
+    exchange: incident.exchange
+    queue: incident.triage.queue
+    routing-key: incident.created

@@ -25,6 +25,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import br.com.fiap.gs.messaging.IncidentTriageRequested;
+import org.springframework.context.ApplicationEventPublisher;
+
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +43,8 @@ public class IncidentService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final IncidentMapper mapper;
+    private final ApplicationEventPublisher eventPublisher;
+
 
     public Page<IncidentResponse> findAll(
             IncidentStatus status,
@@ -110,7 +115,13 @@ public class IncidentService {
         incident.setStatus(IncidentStatus.OPEN);
         incident.setTriageStatus(TriageStatus.PENDING);
 
-        return mapper.toResponse(incidentRepository.save(incident));
+        Incident saved = incidentRepository.saveAndFlush(incident);
+
+        eventPublisher.publishEvent(
+                new IncidentTriageRequested(saved.getId())
+        );
+
+        return mapper.toResponse(saved);
     }
 
     @Transactional
