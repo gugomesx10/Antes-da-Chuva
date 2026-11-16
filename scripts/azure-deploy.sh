@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Antes da Chuva - build do jar e deploy manual no Web App.
-# Útil antes da Release do Azure DevOps estar pronta. Exige ./scripts/azure-setup.sh já executado.
+# Exige ./scripts/azure-setup.sh já executado.
 #
 # Uso: ./scripts/azure-deploy.sh
 

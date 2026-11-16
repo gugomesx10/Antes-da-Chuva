@@ -143,8 +143,6 @@
 
     <build>
         <plugins>
-            <!-- Lombok declarado como annotation processor explícito: a partir do JDK 23
-                 o javac não executa processors encontrados só no classpath -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
