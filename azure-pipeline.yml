@@ -1,0 +1,73 @@
+# Antes da Chuva - Pipeline de Build (CI)
+#
+# Dispara somente quando há merge na branch principal (main) via Pull Request.
+# Etapas: verificar ambiente -> testes + build (Maven) -> publicar resultado dos testes
+#         -> publicar o pacote (.jar) como artefato "drop", consumido pela Release.
+#
+# Os testes rodam no perfil "test" (H2 em memória, migrations Flyway, sem RabbitMQ/Gemini),
+# então o CI não depende de nenhum serviço externo nem de segredos.
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  branches:
+    include:
+      - main
+
+# Sem build de validação em PR: o build roda depois do merge na principal
+pr: none
+
+pool:
+  # Agente self-hosted (pool "Default"), como na Sprint 4.
+  # Se a organização tiver paralelismo hospedado liberado, troque por:  vmImage: ubuntu-latest
+  name: Default
+
+variables:
+  artifactName: drop
+
+stages:
+  - stage: Build
+    displayName: Build e testes
+    jobs:
+      - job: BuildTest
+        displayName: Testes JUnit e empacotamento
+        steps:
+          - checkout: self
+            displayName: Baixar código-fonte
+
+          - bash: |
+              set -e
+              echo "Agente: $(Agent.Name) ($(Agent.OS))"
+              java -version
+            displayName: Verificar JDK (Java 21+)
+
+          - bash: |
+              set -e
+              chmod +x mvnw
+              ./mvnw -B clean verify
+            displayName: Executar testes e gerar o .jar (Maven)
+
+          - task: PublishTestResults@2
+            displayName: Publicar resultados dos testes (JUnit)
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: '**/target/surefire-reports/TEST-*.xml'
+              testRunTitle: Antes da Chuva - JUnit
+              failTaskOnFailedTests: true
+
+          - task: CopyFiles@2
+            displayName: Copiar pacote para a área de artefatos
+            inputs:
+              SourceFolder: $(System.DefaultWorkingDirectory)/target
+              Contents: |
+                *.jar
+                !*-plain.jar
+              TargetFolder: $(Build.ArtifactStagingDirectory)
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publicar artefato ($(artifactName))
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)
+              ArtifactName: $(artifactName)
+              publishLocation: Container

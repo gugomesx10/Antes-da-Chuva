@@ -44,7 +44,17 @@ flowchart TD
 
 - `CIDADAO`: registra, consulta e, quando permitido, edita ou cancela ocorrências próprias.
 - `GESTOR`: gerencia categorias e atualiza o status de ocorrências.
-- O cadastro público cria apenas `CIDADAO`; o primeiro `GESTOR` deve ser provisionado por processo administrativo seguro.
+- O cadastro público cria apenas `CIDADAO`; o `GESTOR` inicial é criado pela migration `V3__seed_test_users.sql`.
+
+### Usuários de teste
+
+| Perfil | E-mail | Senha |
+| --- | --- | --- |
+| GESTOR | `gestor@antesdachuva.com` | `Gestor@2026` |
+| CIDADAO | `maria@antesdachuva.com` | `Cidadao@2026` |
+| CIDADAO | `joao@antesdachuva.com` | `Cidadao@2026` |
+
+Contas exclusivas para demonstração e correção, com senhas armazenadas em BCrypt. Novos cidadãos podem se cadastrar por `POST /auth/register`.
 
 Entidades principais: `User`, `Category`, `Incident`, `IncidentUpdate`; a modelagem inclui `Endorsement` e `IncidentAudit`.
 
@@ -172,17 +182,25 @@ az login
 
 ## Testes e estado atual
 
-Foram aprovados testes unitários de cadastro, login, assinatura JWT, mapeamento de perfis, autorização HTTP, recuperação RAG, triagem e reenvio de mensagens pendentes. Também foi executado um teste de integração **real** com Spring AI + Gemini + RAG: um relato fictício de bueiro entupido recebeu a urgência `HIGH`, com resumo e orientação preventiva.
+A suíte roda sem nenhum serviço externo: o perfil `test` (`src/test/resources/application-test.yml`) usa H2 em memória em modo PostgreSQL, aplica as mesmas migrations Flyway da produção (incluindo os usuários de teste) e desliga o consumidor do RabbitMQ e o Gemini.
 
 ```bash
-mvnd -Dtest=AuthServiceTest,JwtTokenServiceTest,JwtRoleMappingTest,CategorySecurityTest test
-mvnd -Dtest=RagKnowledgeServiceTest,IncidentTriageServiceTest,PendingTriageRetryJobTest test
-mvnd -Dtest=IncidentAiIntegrationIT test
+./mvnw clean verify    # 27 testes: unitários + integração HTTP com H2
 ```
 
-O último teste faz chamada externa e exige `GEMINI_API_KEY` válida. Não inclui persistência ou RabbitMQ.
+| Tipo | Cobertura |
+| --- | --- |
+| Unitários (Mockito) | Cadastro, login, JWT, mapeamento de perfis, RAG, triagem, reenvio de pendentes |
+| Segurança (MockMvc) | 401 sem token, 403 por perfil em categorias |
+| Integração (`IncidentFlowIntegrationTest`) | Login do GESTOR, cadastro, criação de ocorrência sem RabbitMQ disponível, mudança de status, transição inválida (409), linha do tempo, cancelamento, validação (400) |
 
-**Ainda pendente:** validar o fluxo completo API → PostgreSQL → RabbitMQ → Gemini → PostgreSQL em ambiente Azure, configurar o primeiro GESTOR e reforçar idempotência/reenvio de mensagens. O agendamento atual tenta reenviar ocorrências pendentes antigas, mas não oferece uma garantia transacional completa de entrega.
+O teste `IncidentAiIntegrationIT` chama o Gemini de verdade e não roda no build padrão: `GEMINI_API_KEY=... ./mvnw -Dtest=IncidentAiIntegrationIT test`. Nele, um relato fictício de bueiro entupido recebeu a urgência `HIGH`, com resumo e orientação preventiva.
+
+### Integração contínua (Azure DevOps)
+
+O arquivo `azure-pipeline.yml` na raiz define o pipeline de build: dispara somente no merge na `main`, executa `./mvnw clean verify`, publica os resultados JUnit e publica o `.jar` como artefato `drop`, consumido pela Release que faz o deploy no Web App.
+
+**Ainda pendente:** reforçar idempotência/reenvio de mensagens. O agendamento atual tenta reenviar ocorrências pendentes antigas, mas não oferece uma garantia transacional completa de entrega.
 
 ## Organização
 
