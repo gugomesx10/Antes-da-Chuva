@@ -1,93 +1,120 @@
 # Antes da Chuva
 
-**Plataforma de zeladoria preventiva com triagem assistida por inteligência artificial.**
+**Plataforma de zeladoria preventiva para registrar ocorrências urbanas e apoiar a triagem com inteligência artificial.**
 
-Projeto da **Global Solution FIAP — 2026/2**. Cidadãos registram problemas urbanos associados a drenagem e alagamentos; gestores acompanham o atendimento e atualizam o andamento. A classificação pela IA é uma **sugestão**, não um alerta oficial da Defesa Civil.
+Projeto acadêmico da **FIAP — Global Solution 2026/2 (CitizenTech)**, desenvolvido para as disciplinas de **Java Advanced** e **Disruptive Architectures: IoT, IoB & Generative IA**.
 
-## O problema e a solução
+> **Aviso:** a urgência calculada pela IA é uma sugestão para apoiar a análise humana. O projeto não é um sistema oficial de alerta meteorológico ou de Defesa Civil.
 
-Ocorrências como bueiros obstruídos, entulho em vias públicas e pontos de alagamento podem ser difíceis de acompanhar quando os relatos são descentralizados. O Antes da Chuva centraliza esses registros, mantém o histórico de atendimento e usa IA para sugerir urgência e orientações preventivas.
+## Integrantes
 
-## Arquitetura
+**Turma:** 2TDSPO
+
+| Aluno | RM |
+|---|---|
+| Gustavo Gomes Martins | 555999 |
+| Pedro dos Anjos | 563832 |
+| Matheus de Mattos Vecchi | 561716 |
+| Nicholas Albuquerque Buzo | 561082 |
+| Nicholas Camillo Canadas de Paula | 561262 |
+
+## Problema e proposta
+
+Bueiros obstruídos, pontos de alagamento, entulho e problemas de drenagem urbana podem ser difíceis de comunicar e acompanhar. O **Antes da Chuva** centraliza relatos de cidadãos, registra seu andamento e auxilia a priorização de atendimentos.
+
+O cidadão informa a categoria, o local e a descrição de uma ocorrência. A API armazena o registro, publica um evento para processamento assíncrono e utiliza **Spring AI + Google Gemini**, com contexto recuperado de uma base local de orientações (**RAG básico**), para sugerir uma urgência e redigir um resumo e uma orientação preventiva. O gestor acompanha as ocorrências e registra mudanças de status com histórico.
+
+## API publicada e demonstração
+
+- **Swagger / OpenAPI:** https://app-antesdachuva-561082.azurewebsites.net/swagger-ui/index.html
+- **Health check:** https://app-antesdachuva-561082.azurewebsites.net/actuator/health
+- **Código-fonte (branch de desenvolvimento):** https://github.com/gugomesx10/Antes-da-Chuva/tree/develop
+- **Vídeo pitch (até 5 minutos):** **[Adicionar link público ou não listado antes da entrega]**
+
+O ambiente publicado foi utilizado em um teste de ponta a ponta: uma ocorrência foi cadastrada pelo Swagger e o resultado da triagem foi consultado no PostgreSQL. A disponibilidade do ambiente durante a correção depende dos serviços externos configurados.
+
+## Arquitetura e fluxo de processamento
 
 ```mermaid
 flowchart TD
-    A[Aplicativo móvel / cliente REST] -->|JWT| B[API Spring Boot]
-    B --> C[(PostgreSQL)]
-    B -->|Após commit| D[RabbitMQ]
+    A[Aplicativo móvel / cliente REST] -->|Cadastro e login JWT| B[API Spring Boot]
+    B -->|Spring Data JPA| C[(PostgreSQL)]
+    B -->|Evento após commit| D[RabbitMQ]
     D --> E[Consumidor de triagem]
-    E --> F[Recuperação RAG lexical]
-    F --> G[Spring AI + Gemini]
-    G --> E
-    E --> C
-    H[Gestor] -->|Atualização de status| B
+    E --> F[RAG lexical: arquivos .txt]
+    F --> G[Spring AI + Google Gemini]
+    G -->|Urgência, resumo, orientação| E
+    E -->|Atualiza triagem| C
+    H[Gestor] -->|JWT e mudança de status| B
 ```
 
-**Fluxo:** o cidadão autentica-se, registra uma ocorrência e recebe um identificador. O Java persiste o registro com `OPEN` e `PENDING`, publica seu ID na fila após a transação e o consumidor solicita a análise da IA. O resultado é persistido em `urgency`, `aiSummary`, `aiGuidance` e `triageStatus`. O gestor pode registrar mudanças de status com histórico.
+1. O cidadão se autentica e envia `POST /incidents`.
+2. A aplicação valida e persiste a ocorrência com `status=OPEN` e `triageStatus=PENDING`.
+3. Após a confirmação da transação, é publicado o ID da ocorrência no RabbitMQ.
+4. O consumidor recupera o relato, consulta os documentos locais via `RagKnowledgeService` e envia o contexto ao Gemini por meio do `IncidentAiService`.
+5. O processamento grava `urgency`, `aiSummary`, `aiGuidance` e `triageStatus=DONE`. Respostas inválidas ou falhas de execução são registradas como `FAILED`.
+6. O gestor pode avançar o atendimento por etapas, mantendo um histórico das transições.
 
-## Stack
+A publicação e o consumo usam o fluxo assíncrono do Spring AMQP. O projeto também possui uma tentativa periódica de reenvio para ocorrências antigas ainda pendentes; isso **não constitui garantia transacional completa de entrega**.
 
-| Camada | Tecnologia |
+## Tecnologias
+
+| Finalidade | Implementação |
 | --- | --- |
-| Linguagem | Java 21 |
-| API | Spring Boot 4.1.2 / Spring Web MVC |
-| Autenticação | Spring Security, JWT HS256 e BCrypt |
-| Persistência | Spring Data JPA, PostgreSQL e Flyway |
-| Assíncrono | Spring AMQP / RabbitMQ |
-| IA | Spring AI 2.0.2 / Google Gemini |
-| RAG | Recuperação lexical em documentos de prevenção |
-| Documentação | OpenAPI / Swagger UI |
-| Testes | JUnit 5, Mockito e MockMvc |
-| Infraestrutura | Azure (deploy planejado) |
+| Backend | Java 21, Spring Boot 4.1.2, Spring Web MVC |
+| Persistência | Spring Data JPA, PostgreSQL, Flyway |
+| Segurança | Spring Security, JWT HS256, BCrypt |
+| Validação e erros | Jakarta Bean Validation, `@RestControllerAdvice` |
+| Mensageria | Spring AMQP e RabbitMQ |
+| IA generativa | Spring AI 2.0.2, Google Gemini 2.5 Flash |
+| Recuperação de conhecimento | RAG básico com busca lexical em arquivos `.txt` |
+| Documentação de endpoints | Springdoc OpenAPI / Swagger UI |
+| Testes | JUnit 5, Mockito, MockMvc e H2 no perfil `test` |
+| Hospedagem da API e banco | Azure App Service e Azure Database for PostgreSQL |
 
-## Perfis e domínio
+## Domínio e permissões
 
-- `CIDADAO`: registra, consulta e, quando permitido, edita ou cancela ocorrências próprias.
-- `GESTOR`: gerencia categorias e atualiza o status de ocorrências.
-- O cadastro público cria apenas `CIDADAO`; o `GESTOR` inicial é criado pela migration `V3__seed_test_users.sql`.
+Entidades principais: `User`, `Category`, `Incident` e `IncidentUpdate`. A modelagem inclui também `Endorsement` e `IncidentAudit`.
 
-### Usuários de teste
+- **CIDADAO:** cadastra-se, autentica-se, registra e acompanha ocorrências; pode editar ou cancelar suas próprias ocorrências enquanto estão abertas.
+- **GESTOR:** autentica-se, administra categorias e registra mudanças de status de ocorrências.
 
-| Perfil | E-mail | Senha |
-| --- | --- | --- |
-| GESTOR | `gestor@antesdachuva.com` | `Gestor@2026` |
-| CIDADAO | `maria@antesdachuva.com` | `Cidadao@2026` |
-| CIDADAO | `joao@antesdachuva.com` | `Cidadao@2026` |
+O cadastro público (`POST /auth/register`) cria usuários do perfil `CIDADAO`; a aplicação não permite selecionar o papel `GESTOR` no cadastro.
 
-Contas exclusivas para demonstração e correção, com senhas armazenadas em BCrypt. Novos cidadãos podem se cadastrar por `POST /auth/register`.
+**Estados da ocorrência:** `OPEN`, `IN_REVIEW`, `IN_PROGRESS`, `RESOLVED`, `REJECTED`, `CANCELLED`.
 
-Entidades principais: `User`, `Category`, `Incident`, `IncidentUpdate`; a modelagem inclui `Endorsement` e `IncidentAudit`.
+**Urgência sugerida:** `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`.
 
-Status: `OPEN`, `IN_REVIEW`, `IN_PROGRESS`, `RESOLVED`, `REJECTED`, `CANCELLED`.
+**Situação da triagem:** `PENDING`, `DONE`, `FAILED`.
 
-Urgência: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`. Triagem: `PENDING`, `DONE`, `FAILED`.
+Transições de atendimento aceitas: `OPEN` → `IN_REVIEW` ou `REJECTED`; `IN_REVIEW` → `IN_PROGRESS` ou `REJECTED`; `IN_PROGRESS` → `RESOLVED` ou `REJECTED`.
 
-## Endpoints
+## Endpoints REST
 
-| Método | Rota | Objetivo | Acesso |
+| Método | Endpoint | Descrição | Permissão |
 | --- | --- | --- | --- |
-| POST | `/auth/register` | Cadastro | Público |
-| POST | `/auth/login` | Login / JWT | Público |
-| GET | `/auth/me` | Usuário atual | Autenticado |
-| GET | `/categories` | Lista paginada | Autenticado |
-| GET | `/categories/{id}` | Detalhe | Autenticado |
-| POST | `/categories` | Criar categoria | GESTOR |
-| PUT | `/categories/{id}` | Atualizar categoria | GESTOR |
-| DELETE | `/categories/{id}` | Desativar categoria | GESTOR |
-| GET | `/incidents` | Listagem com filtros | Autenticado |
-| GET | `/incidents/mine` | Minhas ocorrências | CIDADAO |
-| GET | `/incidents/{id}` | Detalhe | Autenticado |
-| POST | `/incidents` | Registrar ocorrência | CIDADAO |
-| PUT | `/incidents/{id}` | Editar ocorrência própria | CIDADAO |
-| DELETE | `/incidents/{id}` | Cancelar ocorrência própria | CIDADAO |
-| GET | `/incidents/{incidentId}/updates` | Histórico de status | Autenticado |
-| POST | `/incidents/{incidentId}/updates` | Alterar status | GESTOR |
+| `POST` | `/auth/register` | Cadastro de cidadão | Público |
+| `POST` | `/auth/login` | Login e emissão de JWT | Público |
+| `GET` | `/auth/me` | Usuário autenticado | Autenticado |
+| `GET` | `/categories` | Listagem paginada de categorias | Autenticado |
+| `GET` | `/categories/{id}` | Detalhe da categoria | Autenticado |
+| `POST` | `/categories` | Cadastro de categoria | GESTOR |
+| `PUT` | `/categories/{id}` | Edição de categoria | GESTOR |
+| `DELETE` | `/categories/{id}` | Desativação lógica da categoria | GESTOR |
+| `GET` | `/incidents` | Lista paginada, filtros de status, categoria e bairro | Autenticado |
+| `GET` | `/incidents/mine` | Ocorrências do usuário | CIDADAO |
+| `GET` | `/incidents/{id}` | Detalhes da ocorrência | Autenticado |
+| `POST` | `/incidents` | Registro de ocorrência | CIDADAO |
+| `PUT` | `/incidents/{id}` | Edição da própria ocorrência aberta | CIDADAO |
+| `DELETE` | `/incidents/{id}` | Cancelamento lógico da própria ocorrência aberta | CIDADAO |
+| `GET` | `/incidents/{incidentId}/updates` | Histórico do atendimento | Autenticado |
+| `POST` | `/incidents/{incidentId}/updates` | Alteração de status | GESTOR |
 
-`GET /incidents` aceita `status`, `categoryId` e `neighborhood` como filtros opcionais. Endpoints de listagem oferecem paginação.
+Os endpoints protegidos exigem `Authorization: Bearer <TOKEN_JWT>`. As listagens usam paginação Spring Data; `GET /incidents` aceita filtros opcionais `status`, `categoryId` e `neighborhood`.
 
-**Swagger:** `/swagger-ui/index.html` • **Saúde:** `/actuator/health`.
+### Exemplo: cadastro e autenticação
 
-### Exemplo de cadastro
+`POST /auth/register`:
 
 ```json
 {
@@ -98,33 +125,79 @@ Urgência: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`. Triagem: `PENDING`, `DONE`, `FAI
 }
 ```
 
-Envie para `POST /auth/register`.
+Depois, utilize `POST /auth/login` com e-mail e senha para receber `accessToken`. Na interface Swagger, clique em **Authorize** e informe o token.
 
-### Exemplo de ocorrência
+### Exemplo: criar ocorrência
+
+`POST /incidents` com JWT de cidadão:
 
 ```json
 {
-  "categoryId": 1,
-  "title": "Bueiro obstruído por lixo",
-  "description": "Há acúmulo de água na rua após as chuvas.",
-  "address": "Rua Exemplo, 100",
+  "categoryId": 3,
+  "title": "Ponto de alagamento após chuva forte",
+  "description": "Há água acumulada na rua, dificultando a passagem de moradores.",
+  "address": "Rua Exemplo, 200",
   "neighborhood": "Mooca",
-  "latitude": -23.550000,
-  "longitude": -46.630000
+  "latitude": -23.551,
+  "longitude": -46.631
 }
 ```
 
-Envie para `POST /incidents` com `Authorization: Bearer <TOKEN_JWT>`. A categoria `1` é **Bueiro entupido**, criada pela migration `V2__seed_categories.sql`.
+As categorias iniciais são criadas por `V2__seed_categories.sql`: bueiro entupido, entulho em via pública, ponto de alagamento, córrego assoreado e árvore em risco.
 
-## RAG e IA
+## IA generativa e RAG básico — IoT / Disruptive Architectures
 
-Os documentos em `src/main/resources/knowledge/` abrangem bueiros, alagamentos e prevenção. O `RagKnowledgeService` normaliza palavras e seleciona até dois documentos relacionados ao relato. O `IncidentAiService` passa esses trechos como contexto para o Gemini e recebe um `AiTriageResult` com urgência, resumo e orientação.
+A funcionalidade de IA foi construída para auxiliar a **triagem de relatos urbanos**, e não como chatbot independente. O `IncidentAiService` utiliza o Gemini para obter três resultados estruturados: urgência sugerida, resumo e orientação preventiva.
 
-**Limite técnico:** o RAG é lexical, sem embeddings nem banco vetorial. Não há previsão meteorológica em tempo real nem validação oficial dos relatos.
+### Fonte e preparação do conhecimento
 
-## Configuração para execução
+Os textos de referência são armazenados em `src/main/resources/knowledge/`:
 
-Requer **Java 21**, acesso a **PostgreSQL**, **RabbitMQ** e **Gemini API**. Os serviços podem ser remotos. Configure as variáveis de ambiente no host de execução, nunca no repositório:
+| Arquivo | Tema | Referência utilizada na preparação |
+| --- | --- | --- |
+| `bueiros.txt` | Obstruções, lixo e drenagem | [Orientações de prevenção — gov.br](https://www.gov.br/mdr/pt-br/noticias/defesa-civil-prevencao-ajuda-a-evitar-desastres-naturais) |
+| `alagamentos.txt` | Segurança durante alagamentos | [CGE — Prefeitura de São Paulo](https://cge.prefeitura.sp.gov.br/v3/dicas.jsp) |
+| `prevencao.txt` | Preparação e proteção do cidadão | [Guia sobre enchentes — Ministério da Saúde](https://miniapps.saude.gov.br/guia-clima/como-podemos-contribuir/populacao-em-geral/enchentes-e-inundacoes) |
+
+O conteúdo desses arquivos é uma síntese textual preparada para o projeto, não uma coleta em tempo real. O `RagKnowledgeService` normaliza os textos para minúsculas, remove acentos e pontuação, considera palavras de quatro ou mais caracteres e seleciona **até dois documentos** com maior sobreposição de termos. Em seguida, o prompt do `IncidentAiService` fornece os trechos recuperados ao Gemini.
+
+**Justificativa:** como o acervo é pequeno e controlado, a recuperação lexical permite integração simples e rastreável. Não há treinamento de modelo próprio, embeddings ou banco vetorial. A técnica pode falhar para sinônimos ou relatos pouco específicos.
+
+### Critérios de avaliação e limitações
+
+A avaliação considera pertinência das fontes recuperadas, fidelidade do resumo, coerência da urgência com a descrição, segurança das orientações e tratamento de falhas. O projeto não possui amostra humana ampla o suficiente para declarar uma taxa de precisão ou acerto da IA.
+
+O Gemini pode errar, omitir contexto ou propor orientações insuficientes. Não são consultados dados meteorológicos em tempo real nem emitidos alertas oficiais; a classificação deve ser validada por um responsável. Em caso de indisponibilidade ou resposta inválida, o fluxo prevê `triageStatus=FAILED`.
+
+**Documentação complementar com arquitetura, matriz de testes, evidência e limitações:** [Avaliação da IA e do RAG](docs/AVALIACAO_IA.md).
+
+## Evidência de execução — ocorrência 100
+
+Durante um teste com a API hospedada, a ocorrência `100` foi registrada inicialmente com `OPEN`, `PENDING` e campos de IA ainda vazios. Em uma consulta posterior ao PostgreSQL, foram observados:
+
+| Campo | Resultado observado |
+| --- | --- |
+| `incident_id` | `100` |
+| `status` | `OPEN` |
+| `urgency` | `HIGH` |
+| `triage_status` | `DONE` |
+| `ai_summary` | Preenchido |
+| `ai_guidance` | Preenchido |
+
+![Consulta SQL comprovando triagem da ocorrência 100](docs/evidencias/triagem-ocorrencia-100.png)
+
+O registro comprova a **persistência do resultado de triagem**. Uma confirmação específica da publicação e do consumo no RabbitMQ exige também os logs correspondentes; o print do banco, isoladamente, não mede a mensageria.
+
+```sql
+SELECT incident_id, status, urgency,
+       triage_status, ai_summary, ai_guidance
+FROM public.t_incident
+WHERE incident_id = 100;
+```
+
+## Executar localmente
+
+**Pré-requisitos:** JDK 21 e acesso a instâncias configuradas de PostgreSQL, RabbitMQ e Gemini. Use credenciais e segredos via variáveis de ambiente, nunca versionados no Git.
 
 ```dotenv
 DB_URL=jdbc:postgresql://<servidor>:5432/<banco>?sslmode=require
@@ -135,7 +208,7 @@ RABBITMQ_PORT=5672
 RABBITMQ_USERNAME=<usuario>
 RABBITMQ_PASSWORD=<senha>
 RABBITMQ_SSL_ENABLED=false
-GEMINI_API_KEY=<chave>
+GEMINI_API_KEY=<chave-da-api>
 AI_MODEL=gemini-2.5-flash
 JWT_SECRET=<segredo-base64-de-pelo-menos-32-bytes>
 JWT_ISSUER=https://antes-da-chuva.example
@@ -143,87 +216,69 @@ JWT_EXPIRATION_SECONDS=3600
 PORT=8080
 ```
 
-Se o RabbitMQ exigir TLS, ajuste `RABBITMQ_SSL_ENABLED=true` e a porta do serviço (frequentemente `5671`). As tabelas e categorias iniciais são geradas pelas migrations Flyway em `src/main/resources/db/migration`.
+Se o serviço RabbitMQ exigir TLS, configure a porta e `RABBITMQ_SSL_ENABLED=true`. As tabelas são controladas pelas migrations em `src/main/resources/db/migration` e validadas pelo Hibernate na inicialização.
 
-### Build e inicialização
-
-```bash
-mvnd clean package -DskipTests
-java -jar target/Global-Solution-Antes-Da-Chuva-0.0.1-SNAPSHOT.jar
-```
-
-O projeto também possui Maven Wrapper (`./mvnw`). O JAR depende dos serviços e segredos configurados para inicializar corretamente.
-
-## Infraestrutura no Azure
-
-Toda a infraestrutura é criada por scripts Azure CLI em `scripts/`, sem nenhum segredo no código: senhas e chaves vêm de `scripts/.env` (local, fora do Git) ou do Variable Group do Azure DevOps.
-
-| Recurso | Nome | Uso |
-| --- | --- | --- |
-| Resource Group | `rg-antesdachuva` | Agrupa tudo |
-| Azure Database for PostgreSQL Flexible Server | `pg-antesdachuva-<RM>` | Banco da aplicação (Flyway cria as tabelas) |
-| Azure Container Registry | `acrantesdachuva<RM>` | Imagem do RabbitMQ (`dockerfiles/rabbitmq`) |
-| Azure Container Instances | `aci-rabbitmq-antesdachuva` | RabbitMQ (AMQP 5672, painel 15672) |
-| App Service Plan B1 Linux + Web App Java 21 | `app-antesdachuva-<RM>` | API |
+**Linux/macOS:**
 
 ```bash
-cp scripts/.env.example scripts/.env   # preencha RM, senhas, JWT_SECRET e GEMINI_API_KEY
-az login
-./scripts/azure-setup.sh               # cria os recursos e as App Settings (pode ser executado de novo)
-./scripts/azure-deploy.sh              # build + deploy manual do jar (antes da Release do DevOps)
-./scripts/azure-delete.sh              # remove tudo (somente após o fim da correção)
+./mvnw clean verify
+./mvnw spring-boot:run
 ```
 
-| Arquivo | Conteúdo |
-| --- | --- |
-| `scripts/script-bd.sql` | DDL completo do PostgreSQL (consolidação das migrations Flyway) |
-| `dockerfiles/rabbitmq/Dockerfile` | Imagem do RabbitMQ publicada no ACR e executada no ACI |
-| `dockerfiles/app/Dockerfile` | Imagem da API (build multi-stage, Java 21) |
+**Windows (PowerShell):**
 
-## Testes e estado atual
+```powershell
+.\mvnw.cmd clean verify
+.\mvnw.cmd spring-boot:run
+```
 
-A suíte roda sem nenhum serviço externo: o perfil `test` (`src/test/resources/application-test.yml`) usa H2 em memória em modo PostgreSQL, aplica as mesmas migrations Flyway da produção (incluindo os usuários de teste) e desliga o consumidor do RabbitMQ e o Gemini.
+A execução do servidor fora do perfil de teste requer os serviços externos operacionais. A documentação de infraestrutura e scripts de provisionamento estão em `scripts/`, mantidos pela frente de DevOps do grupo.
+
+### Usuários de demonstração e segurança
+
+O projeto possui a migration `V3__seed_test_users.sql` com contas de demonstração usadas em testes e correção. **Atenção:** como as credenciais históricas dessas contas foram incluídas no repositório público, **não devem ser consideradas seguras em um ambiente exposto à internet**. Antes da avaliação em serviço público, as senhas e a disponibilidade das contas precisam ser revistas/rotacionadas por quem administra o ambiente. A inclusão de uma migration já aplicada não deve ser modificada retroativamente: correções de dados devem ser realizadas de modo compatível com o Flyway.
+
+A equipe deve disponibilizar aos avaliadores somente credenciais de teste **controladas**, nunca segredos operacionais, chaves Gemini ou tokens JWT.
+
+## Testes automatizados
+
+O perfil `test` utiliza H2 em memória no modo compatível com PostgreSQL, executa migrations Flyway e não depende do Gemini nem de broker RabbitMQ real para testar o fluxo HTTP.
 
 ```bash
-./mvnw clean verify    # 27 testes: unitários + integração HTTP com H2
+./mvnw clean verify
 ```
 
-| Tipo | Cobertura |
-| --- | --- |
-| Unitários (Mockito) | Cadastro, login, JWT, mapeamento de perfis, RAG, triagem, reenvio de pendentes |
-| Segurança (MockMvc) | 401 sem token, 403 por perfil em categorias |
-| Integração (`IncidentFlowIntegrationTest`) | Login do GESTOR, cadastro, criação de ocorrência sem RabbitMQ disponível, mudança de status, transição inválida (409), linha do tempo, cancelamento, validação (400) |
+Os testes incluem:
 
-O teste `IncidentAiIntegrationIT` chama o Gemini de verdade e não roda no build padrão: `GEMINI_API_KEY=... ./mvnw -Dtest=IncidentAiIntegrationIT test`. Nele, um relato fictício de bueiro entupido recebeu a urgência `HIGH`, com resumo e orientação preventiva.
+- RAG lexical: recuperação relacionada, limite de documentos e ausência de correspondência.
+- Triagem: resultado válido, falha de IA e ocorrência cancelada.
+- Autenticação e autorização: JWT, retorno `401` sem token e `403` quando a função não tem permissão.
+- Integração HTTP com MockMvc: cadastro, ocorrência, histórico de status, conflito `409`, cancelamento e validações `400`.
 
-### Integração contínua (Azure DevOps)
+`IncidentAiIntegrationIT` executa uma chamada **real** à API do Gemini e requer `GEMINI_API_KEY` no ambiente. Não faz parte da execução independente de serviços externos.
 
-O arquivo `azure-pipeline.yml` na raiz define o pipeline de build: dispara somente no merge na `main`, executa `./mvnw clean verify`, publica os resultados JUnit e publica o `.jar` como artefato `drop`, consumido pela Release que faz o deploy no Web App.
-
-**Ainda pendente:** reforçar idempotência/reenvio de mensagens. O agendamento atual tenta reenviar ocorrências pendentes antigas, mas não oferece uma garantia transacional completa de entrega.
-
-## Organização
-
-```text
-src/main/java/br/com/fiap/gs/
-├── ai/
-├── config/
-├── controller/
-├── dto/
-├── entity/
-├── enums/
-├── exception/
-├── mapper/
-├── messaging/
-├── repository/
-├── security/
-└── service/
-src/main/resources/
-├── application.yml
-├── db/migration/
-└── knowledge/
+```bash
+./mvnw -Dtest=IncidentAiIntegrationIT test
 ```
+
+O resultado do teste deve ser registrado conforme a execução real; nenhuma quantidade de testes ou taxa de sucesso é presumida nesta documentação.
+
+## Integração com Mobile
+
+A API fornece cadastro/login JWT, endpoints de categorias e CRUD de ocorrências que podem ser consumidos pelo aplicativo Mobile com Axios ou Fetch. O grupo deve demonstrar, na apresentação de Java, a integração **real** entre o aplicativo e a API, e não apenas as rotas no Swagger. O estado de publicação e das telas do aplicativo deve ser confirmado com a equipe responsável por Mobile.
+
+## Declaração de uso de inteligência artificial
+
+**No produto:** o sistema utiliza Google Gemini 2.5 Flash via Spring AI para sugerir urgência, gerar resumo e fornecer orientação preventiva. O RAG básico seleciona contexto em documentos de referência locais. As saídas são tratadas como apoio à decisão, não como determinações oficiais.
+
+**No desenvolvimento:** o ChatGPT foi utilizado como ferramenta de apoio para compreensão técnica, revisão, testes e organização da documentação. As decisões de implementação e a validação dos resultados devem ser revisadas pela equipe. **[Complementar aqui se foram utilizadas outras ferramentas de IA.]**
+
+## Entregas acadêmicas
+
+- **Java Advanced:** repositório público com documentação de execução, principais endpoints, JWT e perfis, opção distribuída adotada (**RabbitMQ**), descrição do Spring AI, link do deploy e declaração de IA. Enviar o **ZIP** no Portal do Aluno contendo `TXT` de identificação (nome completo, RM e turma), link do repositório e link do vídeo pitch de **até 5 minutos**.
+- **Disruptive Architectures / IoT & IA generativa:** repositório com código, justificativa do RAG, preparação das fontes, arquitetura, critérios, testes e limitações. Enviar **apenas o TXT** de identificação e link do repositório, conforme a orientação da disciplina.
+- **Apresentação presencial:** preparar demonstração funcional e domínio técnico da arquitetura, JWT, Spring AI, mensageria, RAG, limitações e fluxo de atendimento.
 
 ---
 
-**FIAP — Global Solution 2026/2 | Antes da Chuva**
+**FIAP — Global Solution 2026/2 · Antes da Chuva**
