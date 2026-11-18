@@ -1,0 +1,34 @@
+# Perfil usado pelos testes de integração (@ActiveProfiles("test")) e pelo CI do Azure DevOps.
+# Não depende de nenhum serviço externo: banco H2 em memória, sem RabbitMQ e sem Gemini.
+spring:
+  datasource:
+    # Modo PostgreSQL para as migrations Flyway rodarem no H2 sem alteração
+    url: jdbc:h2:mem:antesdachuva;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1;INIT=CREATE DOMAIN IF NOT EXISTS TIMESTAMPTZ AS TIMESTAMP WITH TIME ZONE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    show-sql: false
+
+  ai:
+    google:
+      genai:
+        api-key: chave-falsa-somente-para-testes
+
+  rabbitmq:
+    listener:
+      simple:
+        # Não tenta consumir a fila; a publicação falha de forma tolerada (logada) sem broker
+        auto-startup: false
+
+security:
+  jwt:
+    # 32 bytes em Base64, apenas para testes
+    secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    issuer: https://antes-da-chuva.test
+
+app:
+  triage:
+    # Evita que o job de reenvio rode durante os testes
+    initial-delay-ms: 3600000
