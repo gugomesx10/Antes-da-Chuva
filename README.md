@@ -29,7 +29,7 @@ O cidadão informa a categoria, o local e a descrição de uma ocorrência. A AP
 - **Swagger / OpenAPI:** https://app-antesdachuva-561082.azurewebsites.net/swagger-ui/index.html
 - **Health check:** https://app-antesdachuva-561082.azurewebsites.net/actuator/health
 - **Código-fonte (branch de desenvolvimento):** https://github.com/gugomesx10/Antes-da-Chuva/tree/develop
-- **Vídeo pitch (até 5 minutos):** **[Adicionar link público ou não listado antes da entrega]**
+- **Vídeo pitch (até 5 minutos):**https://youtube.com/shorts/YKgwoY1CVpQ?is=9W469k3YyKDAAUHT
 
 O ambiente publicado foi utilizado em um teste de ponta a ponta: uma ocorrência foi cadastrada pelo Swagger e o resultado da triagem foi consultado no PostgreSQL. A disponibilidade do ambiente durante a correção depende dos serviços externos configurados.
 
