@@ -56,14 +56,14 @@ stages:
               testRunTitle: Antes da Chuva - JUnit
               failTaskOnFailedTests: true
 
-          - task: CopyFiles@2
-            displayName: Copiar pacote para a área de artefatos
-            inputs:
-              SourceFolder: $(System.DefaultWorkingDirectory)/target
-              Contents: |
-                *.jar
-                !*-plain.jar
-              TargetFolder: $(Build.ArtifactStagingDirectory)
+          # O runtime Java do App Service executa /home/site/wwwroot/app.jar.
+          # Publicar com esse nome faz cada Release substituir o jar que realmente roda.
+          - bash: |
+              set -e
+              JAR="$(ls target/*.jar | grep -v -- '-plain.jar' | head -n 1)"
+              cp "$JAR" "$(Build.ArtifactStagingDirectory)/app.jar"
+              ls -l "$(Build.ArtifactStagingDirectory)"
+            displayName: Copiar pacote como app.jar para a área de artefatos
 
           - task: PublishBuildArtifacts@1
             displayName: Publicar artefato ($(artifactName))
