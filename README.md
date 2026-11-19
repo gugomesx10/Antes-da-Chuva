@@ -283,11 +283,10 @@ A infraestrutura é criada por scripts **Azure CLI** em `scripts/`. Nenhuma senh
 
 ### Passo a passo
 
-**1. Pré-requisitos:** [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), JDK 21 ou superior e uma assinatura Azure. Na assinatura **Azure for Students**, uma política limita as regiões permitidas; confira com:
+**1. Pré-requisitos:** [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), JDK 21 ou superior e uma assinatura Azure. Confira o login na Azure:
 
 ```bash
 az login
-az policy assignment list --query "[].parameters.listOfAllowedLocations.value" -o tsv
 ```
 
 **2. Variáveis:** copie o modelo e preencha os valores.
