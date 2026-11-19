@@ -204,8 +204,11 @@ AI_MODEL=gemini-2.5-flash
 JWT_SECRET=<segredo-base64-de-pelo-menos-32-bytes>
 JWT_ISSUER=https://antes-da-chuva.example
 JWT_EXPIRATION_SECONDS=3600
+CORS_ALLOWED_ORIGINS=http://localhost:8099,http://localhost:8081
 PORT=8080
 ```
+
+`CORS_ALLOWED_ORIGINS` lista, separadas por vírgula, as origens web autorizadas a chamar a API (o app Expo rodando no navegador). O app nativo não depende de CORS.
 
 Se o serviço RabbitMQ exigir TLS, configure a porta e `RABBITMQ_SSL_ENABLED=true`. As tabelas são controladas pelas migrations em `src/main/resources/db/migration` e validadas pelo Hibernate na inicialização.
 
@@ -224,6 +227,17 @@ Se o serviço RabbitMQ exigir TLS, configure a porta e `RABBITMQ_SSL_ENABLED=tru
 ```
 
 A execução do servidor fora do perfil de teste requer os serviços externos operacionais. A documentação de infraestrutura e scripts de provisionamento estão em `scripts/`, mantidos pela frente de DevOps do grupo.
+
+## Aplicativo mobile (frontend)
+
+O app React Native / Expo fica na pasta [`frontend/`](frontend/) e consome esta API via `EXPO_PUBLIC_API_URL`. Instruções completas em [frontend/README.md](frontend/README.md); contrato da integração em [frontend/docs/backend-contract.md](frontend/docs/backend-contract.md).
+
+```bash
+cd frontend
+npm ci
+cp .env.example .env   # aponta para a API no Azure; troque para http://<IP-da-máquina>:8080 para usar a API local
+npm start
+```
 
 ### Usuários de demonstração e segurança
 
