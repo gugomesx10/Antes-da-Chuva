@@ -33,20 +33,11 @@ O cidadão informa a categoria, o local e a descrição de uma ocorrência. A AP
 
 O ambiente publicado foi utilizado em um teste de ponta a ponta: uma ocorrência foi cadastrada pelo Swagger e o resultado da triagem foi consultado no PostgreSQL. A disponibilidade do ambiente durante a correção depende dos serviços externos configurados.
 
-## Arquitetura e fluxo de processamento
+## Arquitetura
 
-```mermaid
-flowchart TD
-    A[Aplicativo móvel / cliente REST] -->|Cadastro e login JWT| B[API Spring Boot]
-    B -->|Spring Data JPA| C[(PostgreSQL)]
-    B -->|Evento após commit| D[RabbitMQ]
-    D --> E[Consumidor de triagem]
-    E --> F[RAG lexical: arquivos .txt]
-    F --> G[Spring AI + Google Gemini]
-    G -->|Urgência, resumo, orientação| E
-    E -->|Atualiza triagem| C
-    H[Gestor] -->|JWT e mudança de status| B
-```
+![Arquitetura e fluxo de CI/CD](arquitetura-antes-da-chuva.drawio.png)
+
+## Fluxo de processamento
 
 1. O cidadão se autentica e envia `POST /incidents`.
 2. A aplicação valida e persiste a ocorrência com `status=OPEN` e `triageStatus=PENDING`.
@@ -262,6 +253,162 @@ Os testes incluem:
 ```
 
 O resultado do teste deve ser registrado conforme a execução real; nenhuma quantidade de testes ou taxa de sucesso é presumida nesta documentação.
+
+## Deploy na Azure
+
+A infraestrutura é criada por scripts **Azure CLI** em `scripts/`. Nenhuma senha ou chave fica no código: os valores vêm de `scripts/.env` (arquivo local, ignorado pelo Git) ou, no Azure DevOps, do Variable Group do projeto.
+
+### Recursos criados
+
+| Recurso | Nome | Função |
+| --- | --- | --- |
+| Resource Group | `rg-antesdachuva` | Agrupa todos os recursos |
+| Azure Database for PostgreSQL Flexible Server (B1ms, PostgreSQL 16) | `pg-antesdachuva-<RM>` | Banco da aplicação; tabelas criadas pelo Flyway |
+| Azure Container Registry (Basic) | `acrantesdachuva<RM>` | Imagem do RabbitMQ gerada a partir de `dockerfiles/rabbitmq/Dockerfile` |
+| Azure Container Instances | `aci-rabbitmq-antesdachuva` | RabbitMQ (AMQP `5672`, painel `15672`) |
+| App Service Plan B1 Linux + Web App Java 21 | `plan-antesdachuva` / `app-antesdachuva-<RM>` | API Spring Boot |
+
+### Arquivos usados
+
+| Arquivo | Conteúdo |
+| --- | --- |
+| `scripts/azure-setup.sh` | Cria todos os recursos e as App Settings do Web App; pode ser executado novamente (mantém o que já existe) |
+| `scripts/azure-deploy.sh` | Build do `.jar` e deploy manual no Web App, aguardando o health check |
+| `scripts/azure-delete.sh` | Remove o Resource Group inteiro, com confirmação |
+| `scripts/azure-common.sh` | Nomes dos recursos e carregamento do `.env`, compartilhado pelos scripts |
+| `scripts/.env.example` | Modelo das variáveis, sem valores sensíveis |
+| `scripts/script-bd.sql` | DDL completo do PostgreSQL (consolidação das migrations Flyway) |
+| `dockerfiles/rabbitmq/Dockerfile` | Imagem do RabbitMQ publicada no ACR e executada no ACI |
+| `dockerfiles/app/Dockerfile` | Imagem da API (build multi-stage, Java 21) |
+
+### Passo a passo
+
+**1. Pré-requisitos:** [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli), JDK 21 ou superior e uma assinatura Azure. Na assinatura **Azure for Students**, uma política limita as regiões permitidas; confira com:
+
+```bash
+az login
+az policy assignment list --query "[].parameters.listOfAllowedLocations.value" -o tsv
+```
+
+**2. Variáveis:** copie o modelo e preencha os valores.
+
+```bash
+cp scripts/.env.example scripts/.env
+openssl rand -base64 48        # use o resultado em JWT_SECRET
+```
+
+| Variável | Descrição |
+| --- | --- |
+| `RM` | RM do responsável; compõe os nomes que precisam ser únicos no Azure |
+| `LOCATION` | Região dos recursos (ex.: `chilecentral`, `brazilsouth`) |
+| `ACR_LOCATION` | Região do Container Registry; precisa oferecer **ACR Tasks** (`brazilsouth` oferece, `chilecentral` não) |
+| `DB_ADMIN_USER` / `DB_ADMIN_PASSWORD` | Administrador do PostgreSQL |
+| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | Usuário do RabbitMQ (o `guest` é bloqueado para acesso remoto) |
+| `JWT_SECRET` | Segredo Base64 com pelo menos 32 bytes |
+| `GEMINI_API_KEY` / `AI_MODEL` | Chave e modelo do Google Gemini |
+| `ALLOW_MY_IP` | `true` libera o IP da máquina atual no firewall do PostgreSQL |
+
+**3. Criar a infraestrutura:**
+
+```bash
+./scripts/azure-setup.sh
+```
+
+O script registra os provedores de recursos necessários, cria os recursos da tabela acima, gera a imagem do RabbitMQ com ACR Tasks (ou Docker local, se o ACR Tasks não estiver disponível) e grava as App Settings do Web App (`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `RABBITMQ_*`, `JWT_*`, `GEMINI_API_KEY`, `AI_MODEL`, `PORT`). Os valores sensíveis não são exibidos no terminal. Ao final, são impressos os endereços da API, do Swagger e do painel do RabbitMQ.
+
+**4. Publicar a API:** automaticamente pelo pipeline do Azure DevOps (seção seguinte) ou manualmente:
+
+```bash
+./scripts/azure-deploy.sh
+```
+
+Na primeira inicialização, o Flyway aplica as migrations `V1` a `V3` no PostgreSQL. A API leva cerca de 80 segundos para responder no plano B1.
+
+**5. Verificar:**
+
+```bash
+curl https://app-antesdachuva-<RM>.azurewebsites.net/actuator/health    # {"status":"UP"}
+az webapp log tail -g rg-antesdachuva -n app-antesdachuva-<RM>            # logs em tempo real
+```
+
+| Serviço | Endereço |
+| --- | --- |
+| Swagger | `https://app-antesdachuva-<RM>.azurewebsites.net/swagger-ui/index.html` |
+| Painel do RabbitMQ | `http://rabbit-antesdachuva-<RM>.<região>.azurecontainer.io:15672` |
+| PostgreSQL | `pg-antesdachuva-<RM>.postgres.database.azure.com:5432`, banco `antesdachuva`, SSL obrigatório |
+
+**Acesso ao banco por cliente externo (VS Code, DBeaver, psql):** o firewall libera apenas serviços do Azure e os IPs cadastrados. Se o IP público da máquina mudar, atualize a regra:
+
+```bash
+IP=$(curl -fsS https://api.ipify.org)
+az postgres flexible-server firewall-rule update -g rg-antesdachuva \
+  --server-name pg-antesdachuva-<RM> --name admin-local \
+  --start-ip-address $IP --end-ip-address $IP
+```
+
+**6. Remover os recursos** (somente após o fim da correção, pois o aplicativo Mobile consome esta API):
+
+```bash
+./scripts/azure-delete.sh
+```
+
+### Pipeline de build (Azure DevOps)
+
+O arquivo `azure-pipeline.yml`, na raiz do repositório, define a integração contínua:
+
+| Configuração | Valor |
+| --- | --- |
+| Gatilho | Somente merge na branch `main` (`trigger: main`); sem build em Pull Request (`pr: none`) |
+| Agente | Pool `Default`, com agente self-hosted |
+| Etapas | Verificar JDK → `./mvnw clean verify` → publicar resultados JUnit → copiar o `.jar` → publicar o artefato |
+| Artefato | `drop`, contendo o `.jar` usado no deploy do Web App |
+
+Os testes do pipeline usam o perfil `test` (H2 em memória), portanto o CI não precisa de banco, RabbitMQ, Gemini nem de segredos.
+
+### Agente do pipeline (self-hosted)
+
+O pipeline usa um **agente self-hosted** registrado no pool `Default`, pois a assinatura de estudante não dispõe de paralelismo hospedado pela Microsoft. O agente é um serviço instalado em uma máquina do grupo que se conecta ao Azure DevOps e executa os jobs.
+
+**Requisitos da máquina:** Linux x64, JDK 21 ou superior no `PATH`, biblioteca ICU (`libicu`) e acesso à internet. O Maven não precisa estar instalado, pois o build usa o Maven Wrapper (`./mvnw`).
+
+**1. Token de acesso:** no Azure DevOps, em *User settings → Personal access tokens → New Token*, crie um token com o escopo **Agent Pools (Read & manage)** e validade curta. O token é usado apenas no registro e não deve ser versionado.
+
+**2. Download:** em *Organization settings → Agent pools → Default → New agent → Linux → x64*, copie o link de download:
+
+```bash
+mkdir -p ~/azagent && cd ~/azagent
+curl -fLO <link-copiado>
+tar zxvf vsts-agent-linux-x64-*.tar.gz
+```
+
+**3. Registro:**
+
+```bash
+./config.sh
+```
+
+| Pergunta | Resposta |
+| --- | --- |
+| Server URL | `https://dev.azure.com/<organização>` |
+| Authentication type | PAT (padrão) |
+| Personal access token | Token criado no passo 1 |
+| Agent pool | `Default` |
+| Agent name | Nome identificando a máquina |
+| Work folder | `_work` (padrão) |
+
+**4. Execução como serviço** (inicia junto com o sistema, mantendo o agente disponível durante gravações e correção):
+
+```bash
+sudo ./svc.sh install $USER
+sudo ./svc.sh start
+sudo ./svc.sh status
+```
+
+Para uso pontual, `./run.sh` executa o agente apenas enquanto o terminal estiver aberto.
+
+**5. Conferência:** em *Organization settings → Agent pools → Default → Agents*, o agente deve aparecer como **Online**. Na primeira execução do pipeline, autorize o uso do pool em *View → Permit*.
+
+**Criação do pipeline:** em *Pipelines → New pipeline → Azure Repos Git*, selecione o repositório, escolha *Existing Azure Pipelines YAML file*, branch `main` e caminho `/azure-pipeline.yml`.
 
 ## Integração com Mobile
 
