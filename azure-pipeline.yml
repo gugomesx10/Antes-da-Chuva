@@ -13,10 +13,6 @@ trigger:
   branches:
     include:
       - main
-  # O app mobile (frontend/) não faz parte do .jar; mudanças só nele não disparam o build da API
-  paths:
-    exclude:
-      - frontend/**
 
 # Sem build de validação em PR: o build roda depois do merge na principal
 pr: none
@@ -49,7 +45,9 @@ stages:
               set -e
               chmod +x mvnw
               ./mvnw -B clean verify
-            displayName: Executar testes e gerar o .jar (Maven)
+            # O build também compila o app web (frontend/) e o embute no .jar:
+            # o frontend-maven-plugin baixa o Node 24 e roda npm ci + expo export (requer internet no agente).
+            displayName: Executar testes, build do app web e gerar o .jar (Maven)
 
           - task: PublishTestResults@2
             displayName: Publicar resultados dos testes (JUnit)

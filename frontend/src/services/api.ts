@@ -1,6 +1,8 @@
 let token: string | null = null;
 let onUnauthorized = () => {};
-export const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') ?? '';
+const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+// "same-origin": build web servido pelo próprio backend Spring; as chamadas usam caminhos relativos (/auth, /incidents...).
+export const API_URL = configuredUrl === 'same-origin' ? '' : configuredUrl?.replace(/\/$/, '') || null;
 export function configureSession(value: string | null, expired?: () => void) {
   token = value;
   if (expired) onUnauthorized = expired;
@@ -9,7 +11,7 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  if (!API_URL) throw new Error('Configure EXPO_PUBLIC_API_URL com o endereço do backend Java.');
+  if (API_URL === null) throw new Error('Configure EXPO_PUBLIC_API_URL com o endereço do backend Java.');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
   const requestToken = token;

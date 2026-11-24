@@ -33,6 +33,7 @@ Para rodar no navegador, use `npx expo start --web --port 8099`. O login e as de
 O app usa React Native, Expo SDK 58, Expo Router e TypeScript. As chamadas são feitas com Fetch para a API Java, que usa Spring Boot e Spring Security com JWT. Ocorrências e histórico ficam no backend. O AsyncStorage armazena apenas a sessão.
 
 - Backend Java: na raiz deste repositório (pasta acima de `frontend/`)
+- Versão web publicada: o build Maven do backend embute o app web no `.jar`, servido na mesma URL da API (`/`). Nesse build, `EXPO_PUBLIC_API_URL=same-origin` faz o app usar caminhos relativos.
 - [OpenAPI](https://app-antesdachuva-561082.azurewebsites.net/v3/api-docs)
 - [Status da API](https://app-antesdachuva-561082.azurewebsites.net/actuator/health)
 - [Contrato da integração](docs/backend-contract.md)

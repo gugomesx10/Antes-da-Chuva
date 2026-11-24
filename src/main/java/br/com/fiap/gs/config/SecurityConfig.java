@@ -1,5 +1,7 @@
 package br.com.fiap.gs.config;
 
+import br.com.fiap.gs.controller.FrontendController;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -135,6 +137,20 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/auth/register",
                                 "/auth/login"
+                        ).permitAll()
+                        // App web (frontend/ embutido no jar): arquivos estáticos e rotas da SPA
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/",
+                                "/index.html",
+                                "/favicon.ico",
+                                "/metadata.json",
+                                "/_expo/**",
+                                "/assets/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                FrontendController.ROUTES
                         ).permitAll()
                         .requestMatchers(
                                 "/swagger-ui.html",

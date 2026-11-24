@@ -228,9 +228,25 @@ Se o serviço RabbitMQ exigir TLS, configure a porta e `RABBITMQ_SSL_ENABLED=tru
 
 A execução do servidor fora do perfil de teste requer os serviços externos operacionais. A documentação de infraestrutura e scripts de provisionamento estão em `scripts/`, mantidos pela frente de DevOps do grupo.
 
-## Aplicativo mobile (frontend)
+## Aplicativo mobile e web (frontend)
 
-O app React Native / Expo fica na pasta [`frontend/`](frontend/) e consome esta API via `EXPO_PUBLIC_API_URL`. Instruções completas em [frontend/README.md](frontend/README.md); contrato da integração em [frontend/docs/backend-contract.md](frontend/docs/backend-contract.md).
+O app React Native / Expo fica na pasta [`frontend/`](frontend/). Instruções completas em [frontend/README.md](frontend/README.md); contrato da integração em [frontend/docs/backend-contract.md](frontend/docs/backend-contract.md).
+
+### Versão web na mesma URL da API
+
+O build Maven compila a versão web do app (`npm run build:web`, via `frontend-maven-plugin`, que baixa o Node 24 automaticamente) e a embute no `.jar` em `classpath:/static`. Assim, a mesma URL serve:
+
+| Caminho | Conteúdo |
+| --- | --- |
+| `/`, `/login`, `/cadastro`, `/perfil`, `/sobre`, `/gestor`, `/nova-ocorrencia`, `/detalhe/{id}`, `/editar/{id}` | App web (públicos; o roteamento é feito no navegador) |
+| `/auth`, `/categories`, `/incidents` | API REST (JWT) |
+| `/swagger-ui/index.html` | Documentação da API |
+
+O app web chama a API com caminhos relativos (`EXPO_PUBLIC_API_URL=same-origin` no build), por isso não depende de CORS. As rotas da SPA ficam em `FrontendController`; ao criar uma tela nova em `frontend/src/app`, inclua a rota lá.
+
+Para compilar só a API (mais rápido, sem o app web), use `./mvnw -DskipFrontend ...`. A imagem Docker (`dockerfiles/app`) também contém apenas a API.
+
+### App mobile (Expo Go / emulador)
 
 ```bash
 cd frontend
