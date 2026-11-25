@@ -26,6 +26,7 @@ O cidadão informa a categoria, o local e a descrição de uma ocorrência. A AP
 
 ## API publicada e demonstração
 
+- **WebApp Antes da Chuva:** https://app-antesdachuva-561082.azurewebsites.net/
 - **Swagger / OpenAPI:** https://app-antesdachuva-561082.azurewebsites.net/swagger-ui/index.html
 - **Health check:** https://app-antesdachuva-561082.azurewebsites.net/actuator/health
 - **Código-fonte (branch de desenvolvimento):** https://github.com/gugomesx10/Antes-da-Chuva/tree/develop
